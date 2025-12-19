@@ -1,0 +1,53 @@
+name: CI/CD and Docker
+
+on:
+  push:
+    branches:
+      - main # Chạy tự động khi có code mới đẩy lên nhánh main
+
+jobs:
+  build-and-push:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Lấy source code từ GitHub vào máy ảo của GitHub
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      # 2. Thiết lập môi trường để có thể build Docker hiệu quả hơn
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 3. Đăng nhập vào Docker Hub sử dụng biến môi trường (Secrets)
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # 4. Build Docker image và đẩy lên Docker Hub
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: hquant1k29/it4409-sample:staging
+
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    needs: build-and-push # Chỉ chạy job này sau khi job build-and-push thành công
+    steps:
+      # 5. Kết nối SSH vào máy chủ để thực hiện lệnh deploy
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd /opt/express-app
+            docker compose pull
+            docker compose down
+            docker compose up -d
